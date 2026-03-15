@@ -1,7 +1,11 @@
-import { getTranslations } from 'next-intl/server'
 import { notFound } from 'next/navigation'
 import { getSurah, getAyahs } from '@/lib/api/quran'
 import { SurahReader } from '@/components/quran/surah-reader'
+import type { Database } from '@/types/supabase'
+
+type UserRow = Database['public']['Tables']['users']['Row']
+type BookmarkRow = Database['public']['Tables']['bookmarks']['Row']
+type ReadingProgressRow = Database['public']['Tables']['reading_progress']['Row']
 
 function isSupabaseConfigured(): boolean {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -14,7 +18,7 @@ interface SurahPageProps {
 }
 
 export async function generateMetadata({ params }: SurahPageProps) {
-  const { locale, surahId } = await params
+  const { surahId } = await params
   const surah = await getSurah(parseInt(surahId))
   if (!surah) return {}
   
@@ -39,7 +43,7 @@ export default async function SurahPage({ params, searchParams }: SurahPageProps
   if (!surah) notFound()
 
   let userId: string | undefined
-  let userPrefs = {
+  const userPrefs = {
     fontSize: 'large',
     showTranslation: true,
     bookmarks: [] as string[],
@@ -60,16 +64,16 @@ export default async function SurahPage({ params, searchParams }: SurahPageProps
           supabase.from('reading_progress').select('last_ayah_number').eq('user_id', user.id).eq('surah_id', id).single(),
         ])
         
-        const profileData = profile as any
+        const profileData = profile as Pick<UserRow, 'arabic_font_size' | 'show_translation'> | null
         if (profileData) {
           userPrefs.fontSize = profileData.arabic_font_size
           userPrefs.showTranslation = profileData.show_translation
         }
         if (bookmarks) {
-          userPrefs.bookmarks = (bookmarks as any[]).map((b: any) => b.ayah_id)
+          userPrefs.bookmarks = (bookmarks as Pick<BookmarkRow, 'ayah_id'>[]).map((b) => b.ayah_id)
         }
         if (progress) {
-          userPrefs.progress = (progress as any)?.last_ayah_number || 0
+          userPrefs.progress = (progress as Pick<ReadingProgressRow, 'last_ayah_number'>)?.last_ayah_number || 0
         }
       }
     } catch {

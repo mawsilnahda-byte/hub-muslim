@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -66,12 +66,15 @@ export function SurahReader({
   const [showTranslation, setShowTranslation] = useState(initialShowTranslation)
   const [fontSize, setFontSize] = useState(initialFontSize)
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set(initialBookmarks))
-  const [activeAyah, setActiveAyah] = useState<number | null>(initialAyah || null)
   const [showSettings, setShowSettings] = useState(false)
   const [immersive, setImmersive] = useState(false)
   const supabase = createClient()
 
-  // Scroll to initial ayah
+  // Derive active ayah from audio track (or fall back to initialAyah)
+  const activeAyah: number | null =
+    currentTrack?.surahId === surah.id ? currentTrack.ayahNumber : (initialAyah || null)
+
+  // Scroll to initial ayah on mount
   useEffect(() => {
     if (initialAyah) {
       setTimeout(() => {
@@ -83,49 +86,29 @@ export function SurahReader({
     }
   }, [initialAyah])
 
-  // Track active ayah from audio
+  // Auto-scroll to active ayah when it changes
   useEffect(() => {
-    if (currentTrack?.surahId === surah.id) {
-      setActiveAyah(currentTrack.ayahNumber)
-    } else {
-      setActiveAyah(null)
-    }
-  }, [currentTrack, surah.id])
-
-  // Auto-scroll to active ayah
-  useEffect(() => {
-    if (activeAyah) {
+    if (activeAyah && currentTrack?.surahId === surah.id) {
       const el = document.getElementById(`ayah-${activeAyah}`)
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
     }
-  }, [activeAyah])
+  }, [activeAyah, currentTrack?.surahId, surah.id])
 
-  // Handle next/prev audio events
-  useEffect(() => {
-    const handleNext = () => {
-      if (!activeAyah) return
-      const nextAyah = ayahs.find(a => a.ayah_number === activeAyah + 1)
-      if (nextAyah) {
-        handlePlayAyah(nextAyah)
-      }
-    }
-    const handlePrev = () => {
-      if (!activeAyah) return
-      const prevAyah = ayahs.find(a => a.ayah_number === activeAyah - 1)
-      if (prevAyah) {
-        handlePlayAyah(prevAyah)
-      }
-    }
-
-    window.addEventListener('audio:next', handleNext)
-    window.addEventListener('audio:prev', handlePrev)
-    return () => {
-      window.removeEventListener('audio:next', handleNext)
-      window.removeEventListener('audio:prev', handlePrev)
-    }
-  }, [activeAyah, ayahs])
+  const saveProgress = useCallback(async (ayah: AyahWithTranslation) => {
+    if (!userId) return
+    await fetch('/api/quran/progress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        surah_id: surah.id,
+        ayah_id: ayah.id,
+        ayah_number: ayah.ayah_number,
+        completed: ayah.ayah_number === surah.ayah_count,
+      }),
+    })
+  }, [userId, surah.id, surah.ayah_count])
 
   const getAudioUrl = useCallback((ayahGlobalNumber: number) => {
     return `${currentReciter.audioBaseUrl}${ayahGlobalNumber}.mp3`
@@ -156,24 +139,53 @@ export function SurahReader({
     if (userId) {
       saveProgress(ayah)
     }
-  }, [currentTrack, isPlaying, surah, play, pause, resume, getAudioUrl, userId])
+  }, [currentTrack, isPlaying, surah, play, pause, resume, getAudioUrl, userId, saveProgress])
+
+  // Handle next/prev audio events
+  useEffect(() => {
+    const handleNext = () => {
+      if (!activeAyah) return
+      const nextAyah = ayahs.find(a => a.ayah_number === activeAyah + 1)
+      if (nextAyah) {
+        handlePlayAyah(nextAyah)
+      }
+    }
+    const handlePrev = () => {
+      if (!activeAyah) return
+      const prevAyah = ayahs.find(a => a.ayah_number === activeAyah - 1)
+      if (prevAyah) {
+        handlePlayAyah(prevAyah)
+      }
+    }
+
+    window.addEventListener('audio:next', handleNext)
+    window.addEventListener('audio:prev', handlePrev)
+    return () => {
+      window.removeEventListener('audio:next', handleNext)
+      window.removeEventListener('audio:prev', handlePrev)
+    }
+  }, [activeAyah, ayahs, handlePlayAyah])
+
+  // Handle autoplay: when audio ends, play next ayah if autoplay is enabled
+  useEffect(() => {
+    const handleAudioEnded = () => {
+      if (!autoplay || !activeAyah) return
+      const nextAyah = ayahs.find(a => a.ayah_number === activeAyah + 1)
+      if (nextAyah) {
+        handlePlayAyah(nextAyah)
+      }
+    }
+
+    window.addEventListener('audio:ended', handleAudioEnded)
+    return () => {
+      window.removeEventListener('audio:ended', handleAudioEnded)
+    }
+  }, [autoplay, activeAyah, ayahs, handlePlayAyah])
 
   const handlePlayAll = () => {
     if (ayahs.length > 0) {
       handlePlayAyah(ayahs[0])
     }
-  }
-
-  const saveProgress = async (ayah: AyahWithTranslation) => {
-    if (!userId) return
-    await supabase.from('reading_progress').upsert({
-      user_id: userId,
-      surah_id: surah.id,
-      last_ayah_id: ayah.id,
-      last_ayah_number: ayah.ayah_number,
-      completed: ayah.ayah_number === surah.ayah_count,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,surah_id' })
   }
 
   const handleBookmark = async (ayahId: string) => {

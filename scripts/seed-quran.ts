@@ -29,7 +29,7 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-async function fetchWithRetry(url: string, retries = 3): Promise<any> {
+async function fetchWithRetry(url: string, retries = 3): Promise<unknown> {
   for (let i = 0; i < retries; i++) {
     try {
       const res = await fetch(url)
@@ -81,9 +81,13 @@ const SURAH_NAMES_FR: Record<number, string> = {
 
 async function seedSurahs() {
   console.log('📖 Fetching surahs list...')
-  const surahs = await fetchWithRetry(`${API_BASE}/surah`)
+  interface APISurahItem {
+    number: number; name: string; englishName: string; englishNameTranslation: string;
+    revelationType: string; numberOfAyahs: number;
+  }
+  const surahs = await fetchWithRetry(`${API_BASE}/surah`) as APISurahItem[]
   
-  const surahsToInsert = surahs.map((s: any) => ({
+  const surahsToInsert = surahs.map((s: APISurahItem) => ({
     id: s.number,
     name_arabic: s.name,
     name_transliteration: s.englishName,
@@ -107,9 +111,17 @@ async function seedAyahs() {
   console.log('📝 Fetching Uthmani text (all 6236 ayahs)...')
   
   // Fetch full quran at once
-  const data = await fetchWithRetry(`${API_BASE}/quran/quran-uthmani`)
+  interface APIAyahItem {
+    numberInSurah: number; text: string; juz: number; hizbQuarter?: number; page: number;
+  }
+  interface APISurahWithAyahs { number: number; ayahs: APIAyahItem[] }
+  interface APIQuranData { surahs: APISurahWithAyahs[] }
+  const data = await fetchWithRetry(`${API_BASE}/quran/quran-uthmani`) as APIQuranData
   
-  const ayahsToInsert: any[] = []
+  const ayahsToInsert: Array<{
+    surah_id: number; ayah_number: number; ayah_number_global: number;
+    text_uthmani: string; juz: number; hizb: number | null; page: number;
+  }> = []
   let globalNumber = 1
   
   for (const surah of data.surahs) {
@@ -142,7 +154,10 @@ async function seedAyahs() {
 async function seedTranslations(translatorSlug: string, edition: string, languageCode: string) {
   console.log(`🌍 Fetching translation: ${translatorSlug}...`)
   
-  const data = await fetchWithRetry(`${API_BASE}/quran/${edition}`)
+  interface APITranslationAyah { text: string }
+  interface APISurahTranslation { ayahs: APITranslationAyah[] }
+  interface APITranslationData { surahs: APISurahTranslation[] }
+  const data = await fetchWithRetry(`${API_BASE}/quran/${edition}`) as APITranslationData
   
   // Get translator ID
   const { data: translator } = await supabase
@@ -163,7 +178,9 @@ async function seedTranslations(translatorSlug: string, edition: string, languag
   
   const ayahMap = new Map(ayahs.map(a => [a.ayah_number_global, a.id]))
   
-  const translationsToInsert: any[] = []
+  const translationsToInsert: Array<{
+    ayah_id: string; translator_id: string; language_code: string; text: string;
+  }> = []
   let globalNumber = 1
   
   for (const surah of data.surahs) {

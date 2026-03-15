@@ -72,8 +72,12 @@ export async function fetchSurahsFromAPI(): Promise<SurahFromAPI[]> {
   })
   if (!res.ok) throw new Error('Failed to fetch surahs')
   
+  interface APIsurah {
+    number: number; name: string; englishName: string; englishNameTranslation: string;
+    revelationType: string; numberOfAyahs: number;
+  }
   const data = await res.json()
-  surahsCache = data.data.map((s: any) => ({
+  surahsCache = data.data.map((s: APIsurah) => ({
     id: s.number,
     name_arabic: s.name,
     name_transliteration: s.englishName,
@@ -110,13 +114,16 @@ export async function fetchAyahsFromAPI(
   const translationData = translationRes.ok ? await translationRes.json() : null
   
   const translationMap = new Map<number, string>()
+  interface APIayah {
+    numberInSurah: number; text: string; number: number; juz: number; page: number;
+  }
   if (translationData?.data?.ayahs) {
-    translationData.data.ayahs.forEach((a: any) => {
+    translationData.data.ayahs.forEach((a: APIayah) => {
       translationMap.set(a.numberInSurah, a.text)
     })
   }
 
-  return arabicData.data.ayahs.map((ayah: any) => ({
+  return arabicData.data.ayahs.map((ayah: APIayah) => ({
     id: `api-${surahId}-${ayah.numberInSurah}`,
     surah_id: surahId,
     ayah_number: ayah.numberInSurah,
@@ -144,7 +151,11 @@ export async function searchQuranAPI(
   const data = await res.json()
   if (data.code !== 200) return []
   
-  return (data.data?.matches || []).slice(0, limit).map((m: any) => ({
+  interface APISearchMatch {
+    text: string; numberInSurah: number; number: number;
+    surah: { number: number; englishName: string; name: string };
+  }
+  return (data.data?.matches || []).slice(0, limit).map((m: APISearchMatch) => ({
     text: m.text,
     ayah: {
       id: `api-${m.surah.number}-${m.numberInSurah}`,

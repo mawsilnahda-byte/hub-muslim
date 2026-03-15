@@ -59,8 +59,8 @@ export default function RegisterPage() {
       })
       if (error) throw error
       setSuccess(true)
-    } catch (err: any) {
-      toast.error(err.message || t('registerError'))
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : t('registerError'))
     } finally {
       setLoading(false)
     }

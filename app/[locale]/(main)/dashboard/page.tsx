@@ -6,6 +6,24 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import type { Database } from '@/types/supabase'
+
+type UserRow = Database['public']['Tables']['users']['Row']
+type ReadingStreakRow = Database['public']['Tables']['reading_streaks']['Row']
+
+interface BookmarkWithRelations {
+  id: string
+  surah_id: number
+  ayah: { ayah_number: number; text_uthmani: string } | null
+  surah: { id: number; name_transliteration: string; name_arabic: string } | null
+}
+
+interface ProgressWithRelations {
+  surah_id: number
+  last_ayah_number: number
+  completed: boolean
+  surah: { id: number; name_transliteration: string; ayah_count: number } | null
+}
 
 function isSupabaseConfigured(): boolean {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -25,11 +43,11 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
     redirect(`/${locale}/quran`)
   }
 
-  let user: any = null
-  let profile: any = null
-  let streak: any = null
-  let bookmarks: any[] = []
-  let progress: any[] = []
+  let user: { id: string; email?: string } | null = null
+  let profile: UserRow | null = null
+  let streak: ReadingStreakRow | null = null
+  let bookmarks: BookmarkWithRelations[] = []
+  let progress: ProgressWithRelations[] = []
 
   try {
     const { createClient } = await import('@/lib/supabase/server')
@@ -56,17 +74,15 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         .limit(5),
     ])
 
-    profile = results[0].data
-    streak = results[1].data
-    bookmarks = (results[2].data || []) as any[]
-    progress = (results[3].data || []) as any[]
+    profile = results[0].data as UserRow | null
+    streak = results[1].data as ReadingStreakRow | null
+    bookmarks = (results[2].data || []) as BookmarkWithRelations[]
+    progress = (results[3].data || []) as ProgressWithRelations[]
   } catch {
     redirect(`/${locale}/quran`)
   }
 
-  const p = profile as any
-  const s = streak as any
-  const displayName = p?.display_name || user?.email?.split('@')[0] || 'Utilisateur'
+  const displayName = profile?.display_name || user?.email?.split('@')[0] || 'Utilisateur'
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
@@ -83,7 +99,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
               <Flame className="h-6 w-6 text-orange-500" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{s?.current_streak || 0}</p>
+              <p className="text-2xl font-bold">{streak?.current_streak || 0}</p>
               <p className="text-sm text-muted-foreground">{t('readingStreak')}</p>
             </div>
           </CardContent>
@@ -95,7 +111,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
               <Hash className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{s?.total_ayahs_read || 0}</p>
+              <p className="text-2xl font-bold">{streak?.total_ayahs_read || 0}</p>
               <p className="text-sm text-muted-foreground">{t('totalAyahs')}</p>
             </div>
           </CardContent>
@@ -147,7 +163,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
                 </Button>
               </div>
             ) : (
-              progress.map((p: any) => (
+              progress.map((p) => (
                 <Link
                   key={p.surah_id}
                   href={`/${locale}/quran/${p.surah_id}?ayah=${p.last_ayah_number}`}
@@ -189,7 +205,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
                 <p className="text-sm">{tq('noBookmarks')}</p>
               </div>
             ) : (
-              bookmarks.map((b: any) => (
+              bookmarks.map((b) => (
                 <Link
                   key={b.id}
                   href={`/${locale}/quran/${b.surah_id}?ayah=${b.ayah?.ayah_number}`}

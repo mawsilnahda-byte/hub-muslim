@@ -13,6 +13,14 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetClose,
+} from '@/components/ui/sheet'
 import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
 import { cn } from '@/lib/utils/cn'
@@ -131,10 +139,76 @@ export function Header({ locale, user }: HeaderProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button asChild size="sm">
+            <Button asChild size="sm" className="hidden md:flex">
               <Link href={`/${locale}/login`}>{t('login')}</Link>
             </Button>
           )}
+
+          {/* Mobile menu */}
+          <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon" className="md:hidden">
+                <Menu className="h-5 w-5" />
+                <span className="sr-only">Menu</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right">
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2">
+                  <span className="text-xl">☽</span>
+                  <span className="text-primary">Nuuru</span>
+                </SheetTitle>
+              </SheetHeader>
+              <nav className="mt-6 flex flex-col gap-2">
+                {navLinks.map((link) => (
+                  <SheetClose asChild key={link.href}>
+                    <Link
+                      href={link.href}
+                      className={cn(
+                        'flex items-center gap-3 rounded-md px-3 py-3 text-sm font-medium transition-colors',
+                        pathname.startsWith(link.href)
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                      )}
+                    >
+                      <link.icon className="h-5 w-5" />
+                      {link.label}
+                    </Link>
+                  </SheetClose>
+                ))}
+                {user ? (
+                  <>
+                    <SheetClose asChild>
+                      <Link
+                        href={`/${locale}/dashboard`}
+                        className="flex items-center gap-3 rounded-md px-3 py-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                      >
+                        <LayoutDashboard className="h-5 w-5" />
+                        {tn('dashboard')}
+                      </Link>
+                    </SheetClose>
+                    <button
+                      onClick={() => { setMenuOpen(false); handleLogout() }}
+                      className="flex items-center gap-3 rounded-md px-3 py-3 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <LogOut className="h-5 w-5" />
+                      {t('logout')}
+                    </button>
+                  </>
+                ) : (
+                  <SheetClose asChild>
+                    <Link
+                      href={`/${locale}/login`}
+                      className="flex items-center gap-3 rounded-md px-3 py-3 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                    >
+                      <User className="h-5 w-5" />
+                      {t('login')}
+                    </Link>
+                  </SheetClose>
+                )}
+              </nav>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
     </header>

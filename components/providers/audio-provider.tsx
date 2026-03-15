@@ -83,16 +83,14 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       })
       audioRef.current.addEventListener('ended', () => {
         setIsPlaying(false)
-        if (autoplay && currentTrack) {
-          // Auto play next ayah handled by consumer
-        }
+        window.dispatchEvent(new CustomEvent('audio:ended'))
       })
       audioRef.current.addEventListener('loadstart', () => setIsLoading(true))
       audioRef.current.addEventListener('canplay', () => setIsLoading(false))
       audioRef.current.addEventListener('error', () => setIsLoading(false))
     }
     return audioRef.current
-  }, [autoplay, currentTrack])
+  }, [])
 
   const play = useCallback(async (track: AudioTrack) => {
     const audio = initAudio()

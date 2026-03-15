@@ -13,7 +13,7 @@ Lisez et écoutez le Coran avec texte arabe Uthmani, traductions FR/EN, et lecte
 - **Frontend**: Next.js 16 (App Router) + TypeScript 5 + Tailwind CSS 4
 - **UI**: shadcn/ui components (custom)
 - **Animations**: Framer Motion
-- **Audio**: Web Audio API (wavesurfer.js ready)
+- **Audio**: Web Audio API (HTML5 Audio natif)
 - **DB**: Supabase (PostgreSQL) — fallback alquran.cloud API si non configuré
 - **Auth**: Supabase Auth (email + Google OAuth)
 - **i18n**: next-intl 4 (FR + EN)
@@ -60,18 +60,47 @@ Variables requises :
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Clé anonyme Supabase
 - `SUPABASE_SERVICE_ROLE_KEY` — Clé service (pour le seed)
 
-### 3. Supabase
+### 3. Supabase (production)
 
-1. Créer un projet sur [supabase.com](https://supabase.com)
-2. Exécuter les migrations dans l'ordre :
-   ```
-   supabase/migrations/001_initial_schema.sql
-   supabase/migrations/002_rls_policies.sql
-   ```
-3. Seed les données Coran :
+> **⚠️ Action manuelle requise** — La création d'un projet Supabase nécessite un compte sur supabase.com. Il n'est pas possible de la faire automatiquement sans credentials.
+
+#### Étapes complètes :
+
+1. **Créer un projet Supabase** sur [supabase.com](https://supabase.com) :
+   - Aller sur https://supabase.com/dashboard → "New project"
+   - Choisir une région proche (ex: eu-west-2 pour l'Europe)
+   - Noter l'URL du projet (format : `https://xxxx.supabase.co`)
+
+2. **Récupérer les clés** dans Settings → API :
+   - `NEXT_PUBLIC_SUPABASE_URL` = Project URL
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = anon public key
+   - `SUPABASE_SERVICE_ROLE_KEY` = service_role key (secret)
+
+3. **Mettre à jour `.env.local`** avec ces valeurs
+
+4. **Exécuter les migrations** dans Supabase SQL Editor (dans l'ordre) :
+   - Ouvrir https://supabase.com/dashboard → ton projet → SQL Editor
+   - Copier-coller et exécuter : `supabase/migrations/001_initial_schema.sql`
+   - Puis : `supabase/migrations/002_rls_policies.sql`
+
+5. **Seed les données Coran** :
    ```bash
    npm run seed
    ```
+   > Le seed appelle l'API alquran.cloud pour récupérer les 6236 ayahs + traductions FR/EN.
+   > Durée estimée : 5-10 minutes.
+
+6. **Activer Google OAuth** (optionnel) :
+   - Supabase Dashboard → Authentication → Providers → Google
+   - Configurer avec vos credentials Google Cloud Console
+
+#### Mode sans Supabase (fallback automatique)
+
+Si Supabase n'est pas configuré (`.env.local` contient encore `your-project`), l'app utilise automatiquement l'API publique alquran.cloud. Les fonctionnalités suivantes seront désactivées :
+- Authentification (login/register)
+- Bookmarks
+- Progression de lecture / streaks
+- Dashboard
 
 ### 4. Dev
 
