@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from 'next-intl/server'
 import { ThemeProvider } from '@/components/providers/theme-provider'
@@ -9,6 +9,13 @@ import { notFound } from 'next/navigation'
 import { routing } from '@/i18n/routing'
 import '../globals.css'
 
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a0a0f' },
+  ],
+}
+
 export const metadata: Metadata = {
   title: {
     default: 'Nuuru — نور',
@@ -16,10 +23,6 @@ export const metadata: Metadata = {
   },
   description: 'Hub digital pour la communauté musulmane. Lisez et écoutez le Coran.',
   manifest: '/manifest.json',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#0a0a0f' },
-  ],
 }
 
 interface LocaleLayoutProps {
