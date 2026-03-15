@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { searchQuran } from '@/lib/api/quran'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -11,61 +11,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ results: [] })
   }
 
-  const supabase = await createClient()
-
   try {
-    // Get default translator for locale
-    const { data: translator } = await supabase
-      .from('translators')
-      .select('id')
-      .eq('language_code', locale)
-      .eq('is_default', true)
-      .single()
-
-    if (!translator) {
-      return NextResponse.json({ results: [] })
-    }
-
-    // Try full-text search first, fallback to ILIKE
-    let { data: results, error } = await supabase
-      .from('translations')
-      .select(`
-        text,
-        ayah:ayahs(
-          id,
-          surah_id,
-          ayah_number,
-          ayah_number_global,
-          text_uthmani,
-          surah:surahs(name_transliteration, name_arabic)
-        )
-      `)
-      .eq('translator_id', translator.id)
-      .textSearch('text', query.trim(), { type: 'websearch', config: 'simple' })
-      .limit(limit)
-
-    if (error || !results?.length) {
-      // Fallback ILIKE
-      const { data: fallback } = await supabase
-        .from('translations')
-        .select(`
-          text,
-          ayah:ayahs(
-            id,
-            surah_id,
-            ayah_number,
-            ayah_number_global,
-            text_uthmani,
-            surah:surahs(name_transliteration, name_arabic)
-          )
-        `)
-        .eq('translator_id', translator.id)
-        .ilike('text', `%${query.trim()}%`)
-        .limit(limit)
-
-      results = fallback || []
-    }
-
+    const results = await searchQuran(query.trim(), locale, limit)
     return NextResponse.json({ results })
   } catch (err) {
     console.error('Search error:', err)

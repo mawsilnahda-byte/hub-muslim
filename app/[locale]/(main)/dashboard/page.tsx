@@ -2,11 +2,15 @@ import { getTranslations } from 'next-intl/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { BookOpen, Bookmark, Flame, Hash } from 'lucide-react'
-import { createClient } from '@/lib/supabase/server'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+
+function isSupabaseConfigured(): boolean {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  return url.includes('.supabase.co') && !url.includes('your-project')
+}
 
 interface DashboardPageProps {
   params: Promise<{ locale: string }>
@@ -17,36 +21,52 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
   const t = await getTranslations({ locale, namespace: 'dashboard' })
   const tq = await getTranslations({ locale, namespace: 'quran' })
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect(`/${locale}/login`)
+  if (!isSupabaseConfigured()) {
+    redirect(`/${locale}/quran`)
   }
 
-  const [
-    { data: profile },
-    { data: streak },
-    { data: bookmarks },
-    { data: progress },
-  ] = await Promise.all([
-    supabase.from('users').select('*').eq('id', user.id).single(),
-    supabase.from('reading_streaks').select('*').eq('user_id', user.id).single(),
-    supabase.from('bookmarks')
-      .select('*, ayah:ayahs(ayah_number, text_uthmani), surah:surahs(id, name_transliteration, name_arabic)')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(5),
-    supabase.from('reading_progress')
-      .select('*, surah:surahs(id, name_transliteration, ayah_count)')
-      .eq('user_id', user.id)
-      .order('updated_at', { ascending: false })
-      .limit(5),
-  ])
+  let user: any = null
+  let profile: any = null
+  let streak: any = null
+  let bookmarks: any[] = []
+  let progress: any[] = []
+
+  try {
+    const { createClient } = await import('@/lib/supabase/server')
+    const supabase = await createClient()
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+
+    if (!authUser) {
+      redirect(`/${locale}/login`)
+    }
+    user = authUser
+
+    const results = await Promise.all([
+      supabase.from('users').select('*').eq('id', authUser.id).single(),
+      supabase.from('reading_streaks').select('*').eq('user_id', authUser.id).single(),
+      supabase.from('bookmarks')
+        .select('*, ayah:ayahs(ayah_number, text_uthmani), surah:surahs(id, name_transliteration, name_arabic)')
+        .eq('user_id', authUser.id)
+        .order('created_at', { ascending: false })
+        .limit(5),
+      supabase.from('reading_progress')
+        .select('*, surah:surahs(id, name_transliteration, ayah_count)')
+        .eq('user_id', authUser.id)
+        .order('updated_at', { ascending: false })
+        .limit(5),
+    ])
+
+    profile = results[0].data
+    streak = results[1].data
+    bookmarks = (results[2].data || []) as any[]
+    progress = (results[3].data || []) as any[]
+  } catch {
+    redirect(`/${locale}/quran`)
+  }
 
   const p = profile as any
   const s = streak as any
-  const displayName = p?.display_name || user.email?.split('@')[0] || 'Utilisateur'
+  const displayName = p?.display_name || user?.email?.split('@')[0] || 'Utilisateur'
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
@@ -118,7 +138,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {(!progress || progress.length === 0) ? (
+            {progress.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <BookOpen className="h-10 w-10 mx-auto mb-2 opacity-30" />
                 <p className="text-sm">Commencez à lire le Coran !</p>
@@ -160,12 +180,10 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         {/* Bookmarks */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>{t('myBookmarks')}</span>
-            </CardTitle>
+            <CardTitle>{t('myBookmarks')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {(!bookmarks || bookmarks.length === 0) ? (
+            {bookmarks.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Bookmark className="h-10 w-10 mx-auto mb-2 opacity-30" />
                 <p className="text-sm">{tq('noBookmarks')}</p>

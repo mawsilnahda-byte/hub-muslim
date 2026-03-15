@@ -1,6 +1,32 @@
 import { Header } from './header'
 import { FloatingAudioPlayer } from '@/components/quran/floating-audio-player'
-import { createClient } from '@/lib/supabase/server'
+
+function isSupabaseConfigured(): boolean {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  return url.includes('.supabase.co') && !url.includes('your-project')
+}
+
+async function getUser() {
+  if (!isSupabaseConfigured()) return null
+  
+  try {
+    const { createClient } = await import('@/lib/supabase/server')
+    const supabase = await createClient()
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    
+    if (!authUser) return null
+    
+    const { data } = await supabase
+      .from('users')
+      .select('display_name, email')
+      .eq('id', authUser.id)
+      .single()
+    
+    return data || { email: authUser.email, display_name: null }
+  } catch {
+    return null
+  }
+}
 
 interface MainLayoutProps {
   children: React.ReactNode
@@ -8,22 +34,11 @@ interface MainLayoutProps {
 }
 
 export async function MainLayout({ children, locale }: MainLayoutProps) {
-  const supabase = await createClient()
-  const { data: { user: authUser } } = await supabase.auth.getUser()
-  
-  let userProfile = null
-  if (authUser) {
-    const { data } = await supabase
-      .from('users')
-      .select('display_name, email')
-      .eq('id', authUser.id)
-      .single()
-    userProfile = data || { email: authUser.email, display_name: null }
-  }
+  const user = await getUser()
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header locale={locale} user={userProfile} />
+      <Header locale={locale} user={user} />
       <main className="flex-1 pb-24">
         {children}
       </main>
