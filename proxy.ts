@@ -1,35 +1,44 @@
 import createMiddleware from 'next-intl/middleware'
 import { type NextRequest, NextResponse } from 'next/server'
-import { updateSession } from '@/lib/supabase/middleware'
 import { routing } from './i18n/routing'
 
 const intlMiddleware = createMiddleware(routing)
 
+function isSupabaseConfigured(): boolean {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  return url.includes('.supabase.co') && !url.includes('your-project')
+}
+
 export async function proxy(request: NextRequest) {
-  // Handle auth session refresh
-  const { response, user } = await updateSession(request)
-  
-  // Protected routes
   const pathname = request.nextUrl.pathname
-  const isProtectedRoute = /\/(en|fr)\/(dashboard)/.test(pathname)
-  
-  if (isProtectedRoute && !user) {
-    const locale = pathname.split('/')[1] || 'fr'
-    return NextResponse.redirect(new URL(`/${locale}/login`, request.url))
+
+  // Only check auth if Supabase is configured
+  if (isSupabaseConfigured()) {
+    try {
+      const { updateSession } = await import('@/lib/supabase/middleware')
+      const { response, user } = await updateSession(request)
+      
+      const isProtectedRoute = /\/(en|fr)\/(dashboard)/.test(pathname)
+      if (isProtectedRoute && !user) {
+        const locale = pathname.split('/')[1] || 'fr'
+        return NextResponse.redirect(new URL(`/${locale}/login`, request.url))
+      }
+
+      const intlResponse = intlMiddleware(request)
+      if (intlResponse) {
+        response.headers.forEach((value, key) => {
+          intlResponse.headers.set(key, value)
+        })
+        return intlResponse
+      }
+      
+      return response
+    } catch {
+      // Fall through to intl middleware only
+    }
   }
 
-  // Apply i18n middleware
-  const intlResponse = intlMiddleware(request)
-  
-  // Merge headers from both middlewares
-  if (intlResponse) {
-    response.headers.forEach((value, key) => {
-      intlResponse.headers.set(key, value)
-    })
-    return intlResponse
-  }
-  
-  return response
+  return intlMiddleware(request)
 }
 
 export const config = {
